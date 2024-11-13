@@ -1,0 +1,35 @@
+{
+  "name": "elementals.js",
+  "description": "Reactive web components with signals, JSX, and SSR support.",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "rollup -c -w",
+    "build": "pnpm clean && pnpm types && rollup -c",
+    "clean": "rimraf dist-npm",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "test:client": "vitest --run",
+    "test:client:watch": "vitest --watch",
+    "test:server": "SERVER=true vitest --run",
+    "test:server:watch": "SERVER=true vitest --watch",
+    "types": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@maverick-js/signals": "^6.0.0",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@total-typescript/tsconfig": "^1.0.4",
+    "@types/node": "^22.9.0",
+    "@vitest/browser": "^2.1.4",
+    "playwright": "^1.48.2",
+    "rimraf": "^6.0.1",
+    "rollup": "^4.24.0",
+    "rollup-plugin-dts": "^6.1.1",
+    "rollup-plugin-esbuild": "^6.1.1",
+    "type-fest": "^4.26.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.9",
+    "vitepress": "^1.5.0",
+    "vitest": "^2.1.3"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@maverick-js/elemental",
+    "paths": {
+      "@maverick-js/elemental": ["../src/index.ts"]
+    }
+  }
+}
