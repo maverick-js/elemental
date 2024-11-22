@@ -6,12 +6,12 @@ export interface ContextProvider<T> {
 }
 
 export interface ContextProviderProps<T> {
-  value: T;
+  value?: T;
   children: JSX.Element;
 }
 
-export function createContextProvider<T>(): ContextProvider<T> {
-  const context = createContext<T>();
+export function createContextProvider<T>(provide?: () => T): ContextProvider<T> {
+  const context = createContext<T>(provide);
   return function Provider({ value, children }) {
     provideContext(context, value);
     return children;

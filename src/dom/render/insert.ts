@@ -10,7 +10,6 @@ import { SETUP_SYMBOL } from "../symbols";
 import { hydrating } from "./hydrate-root";
 import { unwrapDeep } from "../../utils/function";
 import { reconcile } from "./reconcile";
-import { flattenArray } from "../../utils/array";
 import type { WriteSignalRecord } from "../../core/types";
 import type { RenderedNode, RenderResult } from "./render";
 import { isCustomElement, isCustomElementConstructor } from "../is";
@@ -23,10 +22,14 @@ export function insert(
   before?: Node | null,
   isTracked = false
 ): RenderResult {
+  if (hydrating && !oldValue) {
+    oldValue = claimChildren(parent, before);
+  }
+
   if (isNil(newValue) || isBoolean(newValue)) {
-    return removeNode(parent, oldValue, null, before);
+    return hydrating ? oldValue : removeNode(parent, oldValue, null, before);
   } else if (isCustomElementConstructor(newValue)) {
-    const el = createCustomElement(newValue);
+    const el = createCustomElement(newValue, oldValue);
     insertDOMNode(parent, el, oldValue, before);
     return el;
   } else if (isFunction(newValue)) {
@@ -37,7 +40,7 @@ export function insert(
   } else if (isArray(newValue)) {
     return insertArray(parent, newValue, oldValue, before, isTracked);
   } else if (isVNode(newValue)) {
-    return insertVNode(parent, newValue, oldValue, before, isTracked);
+    return insertVNode(parent, newValue, oldValue, before);
   } else if (isDOMNode(newValue)) {
     return insertDOMNode(parent, newValue, oldValue, before);
   } else {
@@ -45,8 +48,18 @@ export function insert(
   }
 }
 
-function createElement({ type, props, ref, style, children }: VNode<string>) {
-  const el = document.createElement(type);
+function createElement(
+  { type, props, ref, style, children }: VNode<string>,
+  oldValue: RenderResult
+) {
+  const el =
+    hydrating && isArray(oldValue) && isDOMNode(oldValue[0])
+      ? (oldValue[0] as HTMLElement)
+      : document.createElement(type);
+
+  if (__DEV__ && hydrating && el.localName !== type) {
+    throw createError(`hydration element mismatch, expected "${type}", received "${el.localName}"`);
+  }
 
   setElProps(el, props);
 
@@ -60,16 +73,22 @@ function createElement({ type, props, ref, style, children }: VNode<string>) {
 
 function createCustomElement(
   ctor: CustomElementConstructor,
-  oldValue?: Node | null,
+  oldValue?: RenderResult | null,
   vnode?: VNode | null
 ) {
   defineCustomElement(ctor);
 
   const el =
-      hydrating && isCustomElement(oldValue)
-        ? oldValue
+      hydrating && isArray(oldValue) && isCustomElement(oldValue[0])
+        ? oldValue[0]
         : (document.createElement(ctor.options.name) as CustomElement),
     $props = el.$props;
+
+  if (__DEV__ && hydrating && el.constructor !== ctor) {
+    throw createError(
+      `hydration custom element mismatch, expected constructor \`${ctor}\`, received constructor \`${el.constructor}\``
+    );
+  }
 
   if (vnode) {
     const { props, ref, style, children } = vnode;
@@ -163,13 +182,7 @@ export function insertArray(
   before?: Node | null,
   isTracked = false
 ) {
-  newValue = flattenArray(newValue, []);
-
-  const oldNodes = hydrating
-      ? claimArray(parent, before)
-      : isArray(oldValue)
-      ? (oldValue as Node[])
-      : null,
+  const oldNodes = isArray(oldValue) ? (oldValue as Node[]) : null,
     newNodes: Node[] = [];
 
   if (resolveArray(newNodes, newValue, oldNodes, isTracked)) {
@@ -179,10 +192,15 @@ export function insertArray(
 
   if (hydrating) {
     if (newNodes.length === 0) {
-      return null;
-    } else {
-      return oldNodes as Node[];
+      return oldValue;
+    } else if (isUndefined(before)) {
+      return [...parent.childNodes];
     }
+
+    const firstNode = newNodes[0];
+    if (firstNode?.parentNode !== parent) return oldValue;
+
+    return claimChildren(parent, before);
   } else if (newNodes.length === 0) {
     const marker = removeNode(parent, oldValue, null, before);
     if (!isUndefined(before)) return marker;
@@ -193,14 +211,14 @@ export function insertArray(
       appendNodes(parent, newNodes, before);
     }
   } else {
-    oldValue && removeNode(parent, oldValue, null, before);
+    oldValue && (parent.textContent = "");
     appendNodes(parent, newNodes);
   }
 
   return newNodes;
 }
 
-function claimArray(parent: Node, before?: Node | null): Node[] {
+function claimChildren(parent: Node, before?: Node | null): Node[] {
   if (!before) {
     return [...parent.childNodes];
   } else {
@@ -219,16 +237,15 @@ function claimArray(parent: Node, before?: Node | null): Node[] {
 export function insertVNode(
   parent: Node,
   newNode: VNode,
-  oldNode: RenderResult,
-  before?: Node | null,
-  isTracked = false
+  oldValue: RenderResult,
+  before?: Node | null
 ) {
-  const result = renderVnode(newNode);
+  const result = renderVNode(newNode, oldValue);
   // Fast path for DOM nodes which are the most common result.
   if (isDOMNode(result)) {
-    return insertDOMNode(parent, result, oldNode, before);
+    return insertDOMNode(parent, result, oldValue, before);
   } else {
-    return insert(parent, result, oldNode, before, isTracked);
+    return insert(parent, result, oldValue, before);
   }
 }
 
@@ -236,7 +253,7 @@ type RenderedVNode = JSX.Element[] | ReadSignal<JSX.Element> | Node | null;
 
 const vnodeCache = new WeakMap<VNode, RenderedVNode>();
 
-function renderVnode(node: VNode): RenderedVNode {
+function renderVNode(node: VNode, oldValue: RenderResult): RenderedVNode {
   if (vnodeCache.has(node)) {
     return vnodeCache.get(node)!;
   }
@@ -244,11 +261,11 @@ function renderVnode(node: VNode): RenderedVNode {
   let result: RenderedVNode;
 
   if (isString(node.type)) {
-    result = createElement(node as VNode<string>);
+    result = createElement(node as VNode<string>, oldValue);
   } else if (isCustomElementConstructor(node.type)) {
-    result = createCustomElement(node.type, node as VNode<CustomElementConstructor>);
+    result = createCustomElement(node.type, oldValue, node as VNode<CustomElementConstructor>);
   } else {
-    result = peek(() => resolveNode((node.type as JSX.Component<any>)(node), null));
+    result = peek(() => resolveNode((node.type as JSX.Component<any>)(node), oldValue));
   }
 
   vnodeCache.set(node, result);
@@ -262,15 +279,12 @@ export function insertDOMNode(
   oldNode: RenderResult,
   before?: Node | null
 ): Node | [Node] | null {
-  if (hydrating || newNode === oldNode) {
-    // no-op
-  } else if (before || isArray(oldNode)) {
-    if (!isUndefined(before)) {
-      return removeNode(parent, oldNode, newNode, before);
-    }
-
+  if ((hydrating && newNode.parentNode === parent) || newNode === oldNode) {
+    return before ? [newNode] : newNode;
+  } else if (isArray(oldNode)) {
+    if (before) return removeNode(parent, oldNode, newNode, before);
     removeNode(parent, oldNode, newNode, null);
-  } else if (!oldNode || !parent.firstChild) {
+  } else if (isNil(oldNode) || !parent.firstChild) {
     parent.appendChild(newNode);
   } else {
     parent.replaceChild(newNode, parent.firstChild);
@@ -285,8 +299,18 @@ export function insertTextNode(
   oldValue: RenderResult,
   before?: Node | null
 ): Text | [Text] | null {
-  if (hydrating) {
-    return claimNode<Text>();
+  if (
+    hydrating &&
+    isArray(oldValue) &&
+    isDOMNode(oldValue[0]) &&
+    isTextNodeType(oldValue[0]) &&
+    oldValue[0].parentNode === parent
+  ) {
+    if (__DEV__ && oldValue[0].textContent !== text) {
+      throw createError(`hydration text mismatch, expected "${text}", received "${oldValue}"`);
+    }
+
+    return oldValue[0];
   } else if (isDOMNode(oldValue) && isTextNodeType(oldValue)) {
     oldValue.data = text;
     return oldValue;
@@ -360,11 +384,11 @@ function resolveArray(
       result = resolveNode(newNode, oldNode);
     if (isFunction(result)) {
       if (isTracked) {
-        const nextNode = unwrapDeep(newNode);
+        const newNodes = unwrapDeep(newNode);
         isDynamic =
           resolveArray(
             rendered,
-            isArray(nextNode) ? nextNode : [nextNode],
+            isArray(newNodes) ? newNodes : [newNodes],
             oldNode ? [oldNode] : null
           ) || isDynamic;
       } else {
@@ -391,12 +415,12 @@ function resolveNode(newNode: JSX.Element, oldNode: RenderResult = null) {
   } else if (isDOMNode(newNode)) {
     return newNode;
   } else if (isVNode(newNode)) {
-    return renderVnode(newNode);
+    return renderVNode(newNode, oldNode);
   } else if (isCustomElementConstructor(newNode)) {
     if (isCustomElement(oldNode) && oldNode.constructor === newNode) {
       return oldNode;
     } else {
-      return createCustomElement(newNode);
+      return createCustomElement(newNode, oldNode);
     }
   } else if (isFunction(newNode)) {
     return newNode;
