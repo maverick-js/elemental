@@ -3,30 +3,29 @@ import type { InferCustomElementEvents, TargetedEventHandler } from "./events";
 import { currentHostElement, throwIfNoHostElement } from "./lifecycle";
 import type { CustomElement } from "./create-custom-element";
 import type { StyleProp } from "../core/types";
-import { noop } from "../utils/is";
-import { ELEMENTAL } from "../core/symbols";
+import { isNil, noop } from "../utils/is";
+import type {
+  CustomServerElement,
+  HTMLServerElement,
+  ServerShadowRoot,
+} from "../server/server-element";
 
 /**
  * Returns the current host element.
  */
-export function getHost(): CustomElement {
+export function getHost<Props = {}, Events = {}>():
+  | CustomElement<Props, Events>
+  | CustomServerElement<Props> {
   if (__DEV__) throwIfNoHostElement(getHost.name);
-  return currentHostElement!;
+  return currentHostElement! as any;
 }
 
 /**
  * Returns the shadow root attached to the current host element.
  */
-export function getShadowRoot(): ShadowRoot {
+export function getShadowRoot(): ShadowRoot | ServerShadowRoot | null {
   if (__DEV__) throwIfNoHostElement(getShadowRoot.name);
-
-  if (__DEV__ && !currentHostElement!.shadowRoot) {
-    throw new Error(
-      `[${ELEMENTAL}]: The host element does not have a shadow root. Make sure to attach one using the 'shadowRoot' option.`
-    );
-  }
-
-  return currentHostElement!.shadowRoot!;
+  return currentHostElement!.shadowRoot;
 }
 
 /**
@@ -34,7 +33,7 @@ export function getShadowRoot(): ShadowRoot {
  *
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent}
  */
-export function $text(el: Element, text: ReadSignal<string | number>): Dispose {
+export function $text(el: Element | HTMLServerElement, text: ReadSignal<string | number>): Dispose {
   if (__SERVER__) {
     el.textContent = text() + "";
     return noop;
@@ -50,7 +49,7 @@ export function $text(el: Element, text: ReadSignal<string | number>): Dispose {
  *
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML}
  */
-export function $html(el: Element, html: ReadSignal<string>): Dispose {
+export function $html(el: Element | HTMLServerElement, html: ReadSignal<string>): Dispose {
   if (__SERVER__) {
     el.innerHTML = html();
     return noop;
@@ -66,7 +65,11 @@ export function $html(el: Element, html: ReadSignal<string>): Dispose {
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element/setAttribute}
  * @see {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy}
  */
-export function $attr(el: Element, name: string, value: ReadSignal<unknown>): Dispose {
+export function $attr(
+  el: Element | HTMLServerElement,
+  name: string,
+  value: ReadSignal<unknown>
+): Dispose {
   if (__SERVER__) {
     setAttribute(el, name, value());
     return noop;
@@ -98,7 +101,11 @@ export function $prop<T, P extends keyof T>(
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element/classList}
  * @see {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy}
  */
-export function $class(el: HTMLElement, name: string, value: ReadSignal<unknown>): Dispose {
+export function $class(
+  el: HTMLElement | HTMLServerElement,
+  name: string,
+  value: ReadSignal<unknown>
+): Dispose {
   if (__SERVER__) {
     toggleClass(el, name, value());
     return noop;
@@ -114,7 +121,11 @@ export function $class(el: HTMLElement, name: string, value: ReadSignal<unknown>
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/style}
  * @see {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy}
  */
-export function $style(el: HTMLElement, name: StyleProp, value: ReadSignal<unknown>): Dispose {
+export function $style(
+  el: HTMLElement | HTMLServerElement,
+  name: StyleProp,
+  value: ReadSignal<unknown>
+): Dispose {
   if (__SERVER__) {
     setStyle(el, name, value());
     return noop;
@@ -130,7 +141,7 @@ export function $style(el: HTMLElement, name: StyleProp, value: ReadSignal<unkno
  * 🔔 The listener is automatically removed if the current scope is disposed!
  */
 export function $listen<
-  Target extends EventTarget,
+  Target extends EventTarget | HTMLServerElement,
   Events = InferCustomElementEvents<Target>,
   Type extends keyof Events = keyof Events
 >(
@@ -150,8 +161,8 @@ export function $listen<
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element/setAttribute}
  * @see {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy}
  */
-export function setAttribute(el: Element, name: string, value: unknown) {
-  if (!value && value !== "" && value !== 0) {
+export function setAttribute(el: Element | HTMLServerElement, name: string, value: unknown) {
+  if (isNil(value) || value === false) {
     el.removeAttribute(name);
   } else {
     const attrValue = value === true ? "" : value + "";
@@ -170,8 +181,8 @@ export function setAttribute(el: Element, name: string, value: unknown) {
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/style}
  * @see {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy}
  */
-export function setStyle(el: HTMLElement, prop: StyleProp, value: unknown) {
-  if (!value && value !== 0) {
+export function setStyle(el: HTMLElement | HTMLServerElement, prop: StyleProp, value: unknown) {
+  if (isNil(value) || value === false) {
     if ((prop as string)[0] === "-") {
       el.style.removeProperty(prop as string);
     } else {
@@ -192,6 +203,6 @@ export function setStyle(el: HTMLElement, prop: StyleProp, value: unknown) {
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element/classList}
  * @see {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy}
  */
-export function toggleClass(el: Element, name: string, value: unknown) {
+export function toggleClass(el: Element | HTMLServerElement, name: string, value: unknown) {
   el.classList[value ? "add" : "remove"](name);
 }

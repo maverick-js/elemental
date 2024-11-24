@@ -1,5 +1,6 @@
 export * from "./attr-map";
 export * from "./escape";
+export * from "./is";
 export * from "./render-to-string";
 export * from "./server-attributes";
 export * from "./server-element";

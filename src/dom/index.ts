@@ -6,7 +6,6 @@ export * from "./events";
 export * from "./helpers";
 export * from "./is";
 export { onConnect, onDisconnect } from "./lifecycle";
-export * from "./symbols";
 
 // Components
 export * from "./components/host";

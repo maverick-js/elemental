@@ -1,14 +1,16 @@
 import { isFunction, isReadSignal, root } from "@maverick-js/signals";
-import type { CustomElementConstructor } from "../dom/create-custom-element";
 import type { JSX } from "../jsx/jsx";
-import { unwrapDeep } from "../utils/function";
+import { unwrap, unwrapDeep } from "../utils/function";
 import { isArray, isBoolean, isNil, isString } from "../utils/is";
 import { isVNode, type VNode } from "../jsx/vnode";
 import { escapeHTML } from "./escape";
 import { SETUP_SYMBOL } from "../dom/symbols";
-import { HTMLCustomServerElement } from "./server-element";
-import { getShadowRootMode } from "../dom/utils/shadow-dom";
+import { CustomServerElement, type CustomServerElementConstructor } from "./server-element";
 import { isCustomElementConstructor } from "../dom/is";
+import { ServerStyleDeclaration } from "./server-style-declaration";
+import { camelToKebabCase } from "../utils/string";
+import { setAttribute } from "../dom/helpers";
+import type { CustomElementConstructor } from "../dom";
 
 export function renderToString(value: JSX.Element) {
   return root((dispose) => {
@@ -42,63 +44,80 @@ function renderNode(value: JSX.Element): string {
   }
 }
 
-function renderElement({ type, props, style, children }: VNode): string {
-  let result = `<${type}`,
-    innerHTML = "";
+function renderElement({ type, props, style, innerHTML, children }: VNode): string {
+  let result = `<${type}`;
 
   for (const prop of Object.keys(props)) {
-    if (prop[0] === "o" && prop[1] === "n" && prop[2] === ":") {
+    if (isEventPropName(prop)) {
       // no-op
-    } else if (prop === "innerHTML") {
-      innerHTML = unwrapDeep(props[prop]) + "";
     } else {
-      // map prop to attr (unwrap)
+      const value = unwrap(props[prop]);
+      if (isNil(value) || value === false) continue;
+      result += ` ${prop.toLowerCase()}="${escapeHTML(value + "", true)}"`;
     }
   }
+
+  if (style) result += renderStyle(style);
 
   result += ">";
-  result += innerHTML || renderNode(children);
+  result += unwrap(innerHTML) ?? renderNode(children);
 
-  return result + `/${type}`;
+  return result + `</${type}>`;
 }
 
-function renderCustomElement(ctor: CustomElementConstructor, vnode?: VNode): string {
-  let { name, shadowRoot } = ctor.options,
-    host = new HTMLCustomServerElement(ctor),
-    result = `<${name}`;
+function renderCustomElement<Props>(ctor: CustomElementConstructor<Props>, vnode?: VNode): string {
+  const host = new CustomServerElement<Props>(
+    ctor as unknown as CustomServerElementConstructor<Props>
+  );
 
   if (vnode) {
-    const { props, style, children } = vnode;
-
-    for (const prop of Object.keys(props)) {
-      const value = props[prop] as any;
-      (host.$props as any)[prop]?.set(isReadSignal(value) ? value() : value);
-    }
-
-    host[SETUP_SYMBOL]();
-
-    result += renderStyle(style);
-    result += ` ${ctor.managedAttribute}>`;
-
-    if (shadowRoot) {
-      result += `<template shadowrootmode="${getShadowRootMode(shadowRoot)}">`;
-    }
-
-    result += host.textContent || renderNode(children);
-
-    if (shadowRoot) {
-      result += "</template>";
-    }
-  } else {
-    host[SETUP_SYMBOL]();
-    result += ` ${ctor.managedAttribute}>`;
+    const { props, style } = vnode;
+    setServerElementProps(host, props);
+    if (style) setStyleDeclarationProps(host.style, style);
   }
 
-  return result + `</${name}>`;
+  host[SETUP_SYMBOL]();
+
+  if (vnode) {
+    host.innerHTML = unwrap(vnode.innerHTML) ?? host.innerHTML + renderNode(vnode.children);
+  }
+
+  return host.toString();
 }
 
-function renderStyle(style: VNode["style"]) {
+export function setServerElementProps(host: CustomServerElement<any>, props: Record<string, any>) {
+  for (const prop of Object.keys(props)) {
+    if (isEventPropName(prop)) {
+      // no-op
+    } else if (prop in host.$props) {
+      const value = props[prop];
+      (host as any)[prop] = isReadSignal(value) ? value() : value;
+    } else {
+      setAttribute(host, prop, unwrap(props[prop]));
+    }
+  }
+}
+
+function renderStyle(props: JSX.CSSStyleProperties) {
   let result = "";
 
-  return result;
+  for (const prop of Object.keys(props) as Array<keyof JSX.CSSStyleProperties>) {
+    const value = unwrap(props[prop]);
+    if (isNil(value) || value === false) continue;
+    const name = prop[0] === "-" ? prop : camelToKebabCase(prop);
+    result += `${name}: ${value};`;
+  }
+
+  return result ? ` style="${result}"` : "";
+}
+
+function setStyleDeclarationProps(style: ServerStyleDeclaration, props: JSX.CSSStyleProperties) {
+  for (const prop of Object.keys(props)) {
+    // @ts-expect-error
+    style[prop] = unwrap(props[prop]);
+  }
+}
+
+function isEventPropName(name: string) {
+  return name[0] === "o" && name[1] === "n" && name[2] === ":";
 }

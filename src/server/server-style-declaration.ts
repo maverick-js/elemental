@@ -1,4 +1,4 @@
-import { isNull, isString } from "../utils/is";
+import { isString } from "../utils/is";
 import { camelToKebabCase } from "../utils/string";
 
 const propRE = /\s*:\s*/;
@@ -20,16 +20,24 @@ export class ServerStyleDeclaration {
     return this.#tokens;
   }
 
+  get value() {
+    return this.toString();
+  }
+
+  set value(value: string) {
+    this.#tokens.clear();
+    this.parse(value);
+  }
+
   constructor() {
-    // Catch
     return new Proxy<ServerStyleDeclaration>(this, {
       set(target, prop, value, receiver) {
         if (isString(prop) && !(prop in target)) {
-          const name = camelToKebabCase(prop);
-          if (isNull(value)) {
+          const name = prop[0] === "-" ? prop : camelToKebabCase(prop);
+          if (!value && value !== 0) {
             target.removeProperty(name);
           } else {
-            target.setProperty(name, value);
+            target.setProperty(name, value + "");
           }
         }
 

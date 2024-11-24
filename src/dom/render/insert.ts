@@ -1,6 +1,6 @@
 import { effect, isFunction, isReadSignal, peek, type ReadSignal } from "@maverick-js/signals";
-import { $listen, $prop, $style, setStyle } from "../helpers";
-import { isArray, isBoolean, isNil, isString, isUndefined } from "../../utils/is";
+import { $attr, $listen, $prop, $style, setStyle } from "../helpers";
+import { isArray, isBoolean, isNil, isNull, isString, isUndefined } from "../../utils/is";
 import { isVNode, type VNode } from "../../jsx/vnode";
 import { defineCustomElement } from "../define-custom-element";
 import type { JSX } from "../../jsx/jsx";
@@ -10,7 +10,6 @@ import { SETUP_SYMBOL } from "../symbols";
 import { hydrating } from "./hydrate-root";
 import { unwrapDeep } from "../../utils/function";
 import { reconcile } from "./reconcile";
-import type { WriteSignalRecord } from "../../core/types";
 import type { RenderedNode, RenderResult } from "./render";
 import { isCustomElement, isCustomElementConstructor } from "../is";
 import { createError } from "../../utils/error";
@@ -48,25 +47,21 @@ export function insert(
   }
 }
 
-function createElement(
-  { type, props, ref, style, children }: VNode<string>,
-  oldValue: RenderResult
-) {
-  const el =
-    hydrating && isArray(oldValue) && isDOMNode(oldValue[0])
-      ? (oldValue[0] as HTMLElement)
-      : document.createElement(type);
+function createElement(vnode: VNode<string>, oldValue: RenderResult) {
+  const { type, props, style, ref } = vnode,
+    el =
+      hydrating && isArray(oldValue) && isDOMNode(oldValue[0])
+        ? (oldValue[0] as HTMLElement)
+        : document.createElement(type);
 
   if (__DEV__ && hydrating && el.localName !== type) {
     throw createError(`hydration element mismatch, expected "${type}", received "${el.localName}"`);
   }
 
-  setElProps(el, props);
-
-  if (ref) callRefs(el, ref);
+  setElementProps(el, props);
   if (style) setStyleProps(el, style);
-
-  insertChildren(el, children);
+  insertVNodeChildren(el, vnode);
+  if (ref) callRefs(el, ref);
 
   return el;
 }
@@ -78,11 +73,10 @@ function createCustomElement(
 ) {
   defineCustomElement(ctor);
 
-  const el =
-      hydrating && isArray(oldValue) && isCustomElement(oldValue[0])
-        ? oldValue[0]
-        : (document.createElement(ctor.options.name) as CustomElement),
-    $props = el.$props;
+  let el =
+    hydrating && isArray(oldValue) && isCustomElement(oldValue[0])
+      ? oldValue[0]
+      : (document.createElement(ctor.options.name) as CustomElement);
 
   if (__DEV__ && hydrating && el.constructor !== ctor) {
     throw createError(
@@ -91,34 +85,40 @@ function createCustomElement(
   }
 
   if (vnode) {
-    const { props, ref, style, children } = vnode;
+    const { props, ref, style } = vnode;
 
-    for (const prop of Object.keys(vnode.props)) {
-      if (!(prop in $props)) continue;
-
-      const value = props[prop] as any,
-        $prop = ($props as WriteSignalRecord<Record<string, any>>)[prop]!;
-
-      if (isReadSignal(value)) {
-        effect(() => void $prop.set(value()));
-      } else {
-        $prop.set(value);
-      }
-    }
-
-    if (ref) callRefs(el, ref);
+    setElementProps(el, props);
     if (style) setStyleProps(el, style);
 
-    insertChildren(el, children);
-  }
+    el[SETUP_SYMBOL]();
 
-  el[SETUP_SYMBOL]();
+    insertVNodeChildren(el, vnode);
+
+    if (ref) callRefs(el, ref);
+  } else {
+    el[SETUP_SYMBOL]();
+  }
 
   return el;
 }
 
-export function insertChildren(el: HTMLElement, children: JSX.Element[]) {
-  insert(el, children, null, hasSignal(children) ? null : undefined);
+export function insertChildren(el: HTMLElement, children: JSX.Element[]): RenderResult {
+  // We're passing in null for the last `before` argument here to prevent destructive changes.
+  return insert(el, children, null, el.textContent || hasSignal(children) ? null : undefined);
+}
+
+function insertVNodeChildren(el: HTMLElement, { innerHTML, children }: VNode) {
+  if (!isNull(innerHTML)) {
+    if (isFunction(innerHTML)) {
+      effect(() => {
+        if (!hydrating) el.innerHTML = innerHTML();
+      });
+    } else if (!hydrating) {
+      el.innerHTML = innerHTML;
+    }
+  } else {
+    insertChildren(el, children);
+  }
 }
 
 function hasSignal(list: JSX.Element[]) {
@@ -136,17 +136,25 @@ function hasSignal(list: JSX.Element[]) {
   return false;
 }
 
-function setElProps<T extends HTMLElement>(el: T, props: Record<string, any>) {
+export function isEventPropName(name: string) {
+  return name[0] === "o" && name[1] === "n" && name[2] === ":";
+}
+
+export function setElementProps<T extends HTMLElement>(el: T, props: Record<string, any>) {
   for (const prop of Object.keys(props)) {
     const value = props[prop];
-    if (prop[0] === "o" && prop[1] === "n" && prop[2] === ":") {
+    if (isEventPropName(prop)) {
       const [namespace, eventType] = prop.split(":");
-      $listen(el, eventType as any, value, namespace!.length > 3);
-    } else if (isFunction(value)) {
-      $prop(el, prop as keyof T, value);
+      $listen(el, eventType as any, value, namespace!.length > 2);
     } else if (prop in el) {
-      el[prop as keyof T] = value;
-    } else {
+      if (isReadSignal(value)) {
+        $prop(el, prop as keyof T, value as ReadSignal<any>);
+      } else {
+        el[prop as keyof T] = value;
+      }
+    } else if (isFunction(value)) {
+      $attr(el, prop, value);
+    } else if (!hydrating) {
       el.setAttribute(prop, value);
     }
   }

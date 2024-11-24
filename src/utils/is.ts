@@ -31,3 +31,7 @@ export function isNumber(value: unknown): value is number {
 export function isObject(value: unknown): value is object {
   return typeof value === "object";
 }
+
+export function isNonNullObject(value: unknown): value is object {
+  return !isNull(value) && typeof value === "object";
+}

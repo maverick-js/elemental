@@ -1,4 +1,5 @@
 import type { ReadSignal, WriteSignal } from "@maverick-js/signals";
+import type { ConditionalPick } from "type-fest";
 
 export type Reactive<T> = T | ReadSignal<T>;
 
@@ -33,15 +34,6 @@ export type AnyRecord = {
 };
 
 export type StyleProp =
-  | Exclude<
-      keyof CSSStyleDeclaration,
-      | "item"
-      | "setProperty"
-      | "removeProperty"
-      | "getPropertyValue"
-      | "getPropertyPriority"
-      | "length"
-      | "parentRule"
-    >
+  | keyof ConditionalPick<CSSStyleDeclaration, string>
   | `--${string}`
   | (string & {});

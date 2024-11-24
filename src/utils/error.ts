@@ -1,5 +1,5 @@
 import { ELEMENTAL, ERROR_SYMBOL } from "../core/symbols";
-import { isObject } from "./is";
+import { isNonNullObject } from "./is";
 
 export function createError(message: string): Error {
   const error = new Error(`[${ELEMENTAL}]: ${message}`);
@@ -8,5 +8,5 @@ export function createError(message: string): Error {
 }
 
 export function isElementalError(error: unknown): error is Error {
-  return error != null && isObject(error) && ERROR_SYMBOL in error;
+  return isNonNullObject(error) && ERROR_SYMBOL in error;
 }

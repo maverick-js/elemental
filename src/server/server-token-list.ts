@@ -21,6 +21,19 @@ export class ServerTokenList {
     return this.#tokens;
   }
 
+  get value() {
+    return this.toString();
+  }
+
+  set value(value: string) {
+    this.#tokens.clear();
+    this.parse(value);
+  }
+
+  get values() {
+    return [...this.#tokens];
+  }
+
   add(...tokens: string[]): void {
     for (const token of tokens) {
       this.#tokens.add(token);

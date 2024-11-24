@@ -15,33 +15,33 @@ declare global {
    * @example
    * ```ts
    * declare global {
-   *   interface ElementalOnAttributes {
+   *   interface ElementalEventMap {
    *     foo: CustomEvent<number>;
    *   }
    * }
    * ```
    */
-  interface ElementalOnAttributes extends HTMLElementEventMap {
+  interface ElementalEventMap extends HTMLElementEventMap {
     attached: Event;
   }
 
   /**
-   * Store all custom element types in this interface so they can be used in JSX. This will also
-   * include elements in the global `HTMLElementTagNameMap` interface so DOM API's such as
+   * Store all custom element types in this interface so they can be used in JSX. This will
+   * include elements in the global `HTMLElementTagNameMap` interface as well so DOM API's such as
    * `querySelector` will be typed correctly.
    *
    * @example
    * ```ts
    * declare global {
-   *   interface ElementalElements {
+   *   interface ElementalTagNameMap {
    *     'v-foo': FooElement
    *   }
    * }
    * ```
    */
-  interface ElementalElements {}
+  interface ElementalTagNameMap {}
 
-  interface HTMLElementTagNameMap extends ElementalElements {}
+  interface HTMLElementTagNameMap extends ElementalTagNameMap {}
 }
 
 export namespace JSX {
@@ -113,9 +113,9 @@ export namespace JSX {
    * All global events with the event `currentTarget` set to the given generic `Target`.
    */
   export type TargetedGlobalEvents<Target extends EventTarget> = {
-    [EventType in keyof ElementalOnAttributes]: TargetedEventHandler<
+    [EventType in keyof ElementalEventMap]: TargetedEventHandler<
       Target,
-      ElementalOnAttributes[EventType]
+      ElementalEventMap[EventType]
     >;
   };
 
@@ -138,19 +138,11 @@ export namespace JSX {
 
   /**
    * -------------------------------------------------------------------------------------------
-   * Class
+   * S
    * -------------------------------------------------------------------------------------------
    */
 
-  export type ClassValue = unknown;
-
-  /**
-   * -------------------------------------------------------------------------------------------
-   * CSS
-   * -------------------------------------------------------------------------------------------
-   */
-
-  export type CSSValue = string | false | null | undefined;
+  export type CSSValue = string | number | false | null | undefined;
 
   export type CSSStyleProperties = {
     [P in keyof StyleProp]: SignalOrValue<CSSValue>;
@@ -231,7 +223,6 @@ export namespace JSX {
     checked?: boolean;
     cite?: string;
     class?: string;
-    className?: string;
     cols?: number;
     colSpan?: number;
     content?: string;
@@ -798,8 +789,8 @@ export namespace JSX {
   export interface IntrinsicElementAttributes<Element extends DOMElement>
     extends HTMLElementAttributes,
       RefAttributes<Element>,
-      OnAttributes<Element, ElementalOnAttributes>,
-      OnCaptureAttributes<Element, ElementalOnAttributes> {}
+      OnAttributes<Element, ElementalEventMap>,
+      OnCaptureAttributes<Element, ElementalEventMap> {}
 
   export interface IntrinsicElements {
     // HTML
@@ -978,7 +969,7 @@ export namespace JSX {
    * -------------------------------------------------------------------------------------------
    */
 
-  export interface RawARIAAttributes {
+  export interface ARIA {
     "aria-autocomplete"?: "none" | "inline" | "list" | "both";
     "aria-checked"?: "true" | "false" | "mixed";
     "aria-disabled"?: "true" | "false";
@@ -1030,5 +1021,5 @@ export namespace JSX {
     "aria-roledescription"?: string;
   }
 
-  export interface ARIAAttributes extends ReactiveRecord<RawARIAAttributes> {}
+  export interface ARIAAttributes extends ReactiveRecord<ARIA> {}
 }

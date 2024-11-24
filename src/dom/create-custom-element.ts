@@ -1,7 +1,7 @@
 import { createScope, scoped, signal, type Scope, type WriteSignal } from "@maverick-js/signals";
 import type { ReadSignalRecord, WriteSignalRecord } from "../core/types";
 import { inferToProp, type AttributeConverterMap, type Attributes } from "./attrs";
-import { setHostElement } from "./lifecycle";
+import { setHostElement, type ConnectCallback, type DisconnectCallback } from "./lifecycle";
 import { isString } from "../utils/is";
 import { camelToKebabCase } from "../utils/string";
 import {
@@ -19,6 +19,7 @@ import { isCustomElementDefined } from "./define-custom-element";
 import { hydrating } from "./render/hydrate-root";
 import { ELEMENTAL } from "../core/symbols";
 import { isCustomElementNode, isCustomElementSetup } from "./is";
+import { CustomServerElement } from "../server";
 
 const enum ReadyState {
   Idle = 0,
@@ -41,7 +42,10 @@ export interface CustomElementOptions<Props = {}> {
    */
   readonly shadowRoot?: true | ShadowRootInit;
   /** Setup hook. */
-  setup(this: CustomElement<Props>, context: SetupContext<Props>): void;
+  setup(
+    this: CustomElement<Props> | CustomServerElement<Props>,
+    context: SetupContext<Props>
+  ): void;
 }
 
 export interface SetupContext<Props = {}> {
@@ -68,8 +72,8 @@ export type CustomElement<Props = {}, Events = {}> = Props &
 
     // Callbacks.
     readonly [READY_CALLBACKS_SYMBOL]: Array<() => void>;
-    readonly [CONNECT_CALLBACKS_SYMBOL]: Array<() => void>;
-    readonly [DISCONNECT_CALLBACKS_SYMBOL]: Array<() => void>;
+    readonly [CONNECT_CALLBACKS_SYMBOL]: Array<ConnectCallback>;
+    readonly [DISCONNECT_CALLBACKS_SYMBOL]: Array<DisconnectCallback>;
 
     [SETUP_SYMBOL](): void;
 
@@ -84,14 +88,20 @@ export type CustomElement<Props = {}, Events = {}> = Props &
 export function createCustomElement<T extends CustomElementConstructor<any, any>>(
   ctor: T
 ): InstanceType<T> {
+  if (__SERVER__) {
+    return new CustomServerElement(ctor) as any;
+  }
+
   return document.createElement(ctor.options.name) as InstanceType<T>;
 }
 
 export function createCustomElementClass<Props = {}, Events = {}>(
   options: CustomElementOptions<Props>
 ): CustomElementConstructor<Props, Events> {
-  class CustomElement extends HTMLCustomElement {
-    static override readonly options: CustomElementOptions<Props> = options;
+  const BaseClass = __SERVER__ ? CustomServerElement : HTMLElement;
+
+  class CustomElement extends BaseClass {
+    static readonly options: CustomElementOptions<Props> = options;
   }
 
   // Declare props on the prototype.
@@ -121,8 +131,8 @@ export class HTMLCustomElement<Props = {}> extends HTMLElement implements Custom
   readonly jsx!: any;
 
   readonly [READY_CALLBACKS_SYMBOL]: Array<() => void> = [];
-  readonly [CONNECT_CALLBACKS_SYMBOL]: Array<() => void> = [];
-  readonly [DISCONNECT_CALLBACKS_SYMBOL]: Array<() => void> = [];
+  readonly [CONNECT_CALLBACKS_SYMBOL]: Array<ConnectCallback> = [];
+  readonly [DISCONNECT_CALLBACKS_SYMBOL]: Array<DisconnectCallback> = [];
 
   #state = ReadyState.Idle;
   #connectScope: Scope | null = null;
@@ -291,7 +301,9 @@ export class HTMLCustomElement<Props = {}> extends HTMLElement implements Custom
     this.#connectScope = createScope();
     this.scope.append(this.#connectScope);
 
-    for (const callback of this[CONNECT_CALLBACKS_SYMBOL]) scoped(callback, this.#connectScope);
+    for (const callback of this[CONNECT_CALLBACKS_SYMBOL]) {
+      scoped(callback.bind(this), this.#connectScope);
+    }
   }
 
   disconnectedCallback() {
@@ -300,7 +312,9 @@ export class HTMLCustomElement<Props = {}> extends HTMLElement implements Custom
     this.#connectScope?.dispose();
     this.#connectScope = null;
 
-    for (const callback of this[DISCONNECT_CALLBACKS_SYMBOL]) callback();
+    for (const callback of this[DISCONNECT_CALLBACKS_SYMBOL]) {
+      callback.call(this);
+    }
   }
 
   attributeChangedCallback(name: string, oldValue: string, newValue: string) {

@@ -1,4 +1,5 @@
 import { ELEMENTAL } from "../core/symbols";
+import type { Reactive } from "../core/types";
 import type { CustomElementConstructor } from "../dom/create-custom-element";
 import type { JSX } from "./jsx";
 
@@ -14,8 +15,9 @@ export type VNodeType =
 export interface VNode<Type extends VNodeType = VNodeType> {
   readonly type: Type;
   readonly props: Record<string, unknown>;
-  readonly style?: JSX.CSSStyleProperties;
-  readonly ref?: JSX.Ref<Node> | JSX.RefArray<Node>;
+  readonly style: JSX.CSSStyleProperties | null;
+  readonly ref: JSX.Ref<Node> | JSX.RefArray<Node> | null;
+  readonly innerHTML: Reactive<string> | null;
   readonly children: Array<JSX.Element>;
 }
 
@@ -24,8 +26,9 @@ export const h = createVNode;
 export function createVNode<T extends VNodeType>(
   type: T,
   {
-    ref,
-    style,
+    ref = null,
+    style = null,
+    innerHTML = null,
     ...props
   }: T extends CustomElementConstructor<infer Props, infer Events>
     ? JSX.CustomElementAttributes<Props, Events>
@@ -40,6 +43,7 @@ export function createVNode<T extends VNodeType>(
     props,
     ref,
     style,
+    innerHTML,
     children,
   } as unknown as VNode;
 }

@@ -11,6 +11,9 @@ devDependencies:
   '@rollup/plugin-node-resolve':
     specifier: ^15.3.0
     version: 15.3.0(rollup@4.25.0)
+  '@total-typescript/ts-reset':
+    specifier: ^0.6.1
+    version: 0.6.1
   '@total-typescript/tsconfig':
     specifier: ^1.0.4
     version: 1.0.4
@@ -868,6 +871,10 @@ packages:
       '@testing-library/dom': '>=7.21.4'
     dependencies:
       '@testing-library/dom': 10.4.0
+    dev: true
+
+  /@total-typescript/ts-reset@0.6.1:
+    resolution: {integrity: sha512-cka47fVSo6lfQDIATYqb/vO1nvFfbPw7uWLayIXIhGETj0wcOOlrlkobOMDNQOFr9QOafegUPq13V2+6vtD7yg==}
     dev: true
 
   /@total-typescript/tsconfig@1.0.4:
