@@ -11,7 +11,7 @@ export function setHydrating(isHydrating: boolean) {
 /**
  * Hydrates the given JSX element into the container node, returning a new root instance.
  */
-export function hydrateRoot(container: Node, node: JSX.Element): Root {
+export function hydrateRoot<T extends Node>(container: T, node: JSX.Element): Root<T> {
   try {
     setHydrating(true);
     const root = createRoot(container);

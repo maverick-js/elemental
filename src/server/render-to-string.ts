@@ -93,7 +93,7 @@ export function setServerElementProps(host: CustomServerElement<any>, props: Rec
       const value = props[prop];
       (host as any)[prop] = isReadSignal(value) ? value() : value;
     } else {
-      setAttribute(host, prop, unwrap(props[prop]));
+      setAttribute(host, prop.toLowerCase(), unwrap(props[prop]));
     }
   }
 }
@@ -108,7 +108,7 @@ function renderStyle(props: JSX.CSSStyleProperties) {
     result += `${name}: ${value};`;
   }
 
-  return result ? ` style="${result}"` : "";
+  return result ? ` style="${escapeHTML(result, true)}"` : "";
 }
 
 function setStyleDeclarationProps(style: ServerStyleDeclaration, props: JSX.CSSStyleProperties) {

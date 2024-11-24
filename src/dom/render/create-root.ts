@@ -2,7 +2,7 @@ import { createScope, scoped, type Scope } from "@maverick-js/signals";
 import type { JSX } from "../../jsx/jsx";
 import { removeNode, insert } from "./insert";
 import type { RenderResult } from "./render";
-import { HTMLServerElement, renderToString, ServerShadowRoot } from "../../server";
+import { type HTMLServerElement, renderToString, type ServerShadowRoot } from "../../server";
 
 /**
  * Creates a new root instance for rendering JSX elements into the given container.

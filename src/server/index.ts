@@ -1,7 +1,6 @@
-export * from "./attr-map";
 export * from "./escape";
 export * from "./is";
-export * from "./render-to-string";
+export { renderToString } from "./render-to-string";
 export * from "./server-attributes";
 export * from "./server-element";
 export * from "./server-style-declaration";

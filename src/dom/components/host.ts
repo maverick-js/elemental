@@ -5,8 +5,9 @@ import { isNull } from "../../utils/is";
 import { currentHostElement } from "../lifecycle";
 import { $prop, $style, setStyle } from "../helpers";
 import { setElementProps } from "../render/insert";
-import { setServerElementProps, type CustomServerElement } from "../../server";
+import type { CustomServerElement } from "../../server";
 import type { CustomElement } from "../create-custom-element";
+import { setServerElementProps } from "../../server/render-to-string";
 
 export interface HostProps extends Omit<JSX.IntrinsicElementAttributes<HTMLElement>, "ref"> {
   children?: JSX.Element;
